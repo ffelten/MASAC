@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools >= 61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "MASAC"
+description="Multi-Agent SAC for PettingZoo"
+readme = "README.md"
+requires-python = ">= 3.7"
+authors = [{ name = "Florian Felten", email = "florian.felten@uni.lu" }]
+license = { text = "MIT License" }
+keywords = ["Reinforcement Learning", "Multi-Agent", "RL", "AI"]
+classifiers = [
+    "Development Status :: 4 - Beta",  # change to `5 - Production/Stable` when ready
+    "License :: OSI Approved :: MIT License",
+    'Intended Audience :: Science/Research',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+]
+dependencies = [
+    "pettingzoo >=1.22.3",
+    "numpy >=1.21.0",
+    "torch >=1.11.0",
+    "pygame >=2.1.0",
+    "wandb",
+    "tensorboard",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+# Update dependencies in `all` if any are added or removed
+testing = ["pytest ==7.1.3"]
+
+[project.urls]
+Homepage = "https://github.com/ffelten/MASAC"
+Repository = "https://github.com/ffelten/MASAC"
+Documentation = "https://github.com/ffelten/MASAC"
+"Bug Report" = "https://github.com/ffelten/MASAC/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["morl_baselines", "morl_baselines.*", "examples", "examples.*"]
+
+[tool.setuptools.package-data]
+morl_baselines = ["*.json", "assets/*"]
+
+# Linting, testing, ... ########################################################
+[tool.black]
+safe = true
+line-length = 127
+target-version = ['py37', 'py38', 'py39', 'py310']
+include = '\.pyi?$'
+
+[tool.isort]
+atomic = true
+profile = "black"
+src_paths = ["masac"]
+extra_standard_library = ["typing_extensions"]
+indent = 4
+lines_after_imports = 2
+multi_line_output = 3
