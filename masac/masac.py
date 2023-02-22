@@ -50,7 +50,7 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--total-timesteps", type=int, default=1000000,
                         help="total timesteps of the experiments")
-    parser.add_argument("--buffer-size", type=int, default=int(1e6),
+    parser.add_argument("--buffer-size", type=int, default=int(1e4),
                         help="the replay memory buffer size")
     parser.add_argument("--gamma", type=float, default=0.99,
                         help="the discount factor gamma")
@@ -351,11 +351,12 @@ if __name__ == "__main__":
                     actor_optimizer.step()
 
                     if args.autotune:
-                        alpha_loss = torch.tensor(0.0, device=device)
-                        for i in range(env.max_num_agents):
-                            with torch.no_grad():
-                                _, log_pi, _ = actor.get_action(data.local_obs[:, i, :])
-                            alpha_loss += (-log_alpha * (log_pi + target_entropy)).mean()
+                        with torch.no_grad():
+                            _, log_pi, _ = actor.get_action(flattened_local_obs)
+                            log_pi = einops.reduce(
+                                log_pi.reshape((args.batch_size, env.unwrapped.max_num_agents)), "b a -> b ()", "sum"
+                            )
+                        alpha_loss = (-log_alpha * (log_pi + target_entropy)).mean()
 
                         a_optimizer.zero_grad()
                         alpha_loss.backward()
