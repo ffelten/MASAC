@@ -23,6 +23,7 @@ dependencies = [
     "pygame >=2.1.0",
     "wandb",
     "tensorboard",
+    "einops"
 ]
 dynamic = ["version"]
 

@@ -11,6 +11,7 @@ import time
 from distutils.util import strtobool
 from typing import Dict
 
+import einops
 import gymnasium as gym
 import numpy as np
 import torch
@@ -37,7 +38,7 @@ def parse_args():
                         help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
                         help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
                         help="if toggled, this experiment will be tracked with Weights and Biases")
     parser.add_argument("--wandb-project-name", type=str, default="MASAC",
                         help="the wandb's project name")
@@ -187,6 +188,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # device = torch.device("mps") if torch.backends.mps.is_available() else device
 
     # env setup
     env: ParallelEnv = simple_spread_v2.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
@@ -287,18 +289,21 @@ if __name__ == "__main__":
             data: Experience = rb.sample(args.batch_size, to_tensor=True, device=device, add_id_to_local_obs=True)
             with torch.no_grad():
                 # Computes q value from target networks
-                next_joint_actions = torch.zeros(
+                # flatten data.next_local_obs to forward for all agents at once
+                flattened_next_local_obs = data.next_local_obs.reshape(
+                    (args.batch_size * env.unwrapped.max_num_agents, np.prod(single_observation_space.shape) + 1)
+                )
+                # forward pass to get next actions and log probs
+                next_state_actions, next_state_log_pi, _ = actor.get_action(flattened_next_local_obs)
+                next_joint_actions = next_state_actions.reshape(
                     (args.batch_size, np.prod(single_action_space.shape) * env.unwrapped.max_num_agents)
-                ).to(device)
-                for i in range(env.max_num_agents):
-                    # forward pass to get next actions for the current agent
-                    next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_local_obs[:, i, :])
-                    # joining the actions in a batch
-                    next_joint_actions[
-                        :, i * single_action_space.shape[0] : (i + 1) * single_action_space.shape[0]
-                    ] = next_state_actions
+                )
+                # Sums the log probs of the actions in the agent dimension to get the joint log prob
+                next_state_log_pi = einops.reduce(
+                    next_state_log_pi.reshape((args.batch_size, env.unwrapped.max_num_agents)), "b a -> b ()", "sum"
+                )
 
-                # SAC Q update
+                # SAC Bellman equation
                 qf1_next_target = qf1_target(data.next_global_obs, next_joint_actions)
                 qf2_next_target = qf2_target(data.next_global_obs, next_joint_actions)
                 min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
@@ -321,33 +326,41 @@ if __name__ == "__main__":
                 for _ in range(
                     args.policy_frequency
                 ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    for i in range(env.max_num_agents):
-                        # For each agent, we freeze the policies of the others by taking from the replay buffer
-                        pi, log_pi, _ = actor.get_action(data.local_obs[:, i, :])  # TODO not sure here
-                        next_joint_actions = data.joint_actions.clone()
-                        next_joint_actions[:, i * single_action_space.shape[0] : (i + 1) * single_action_space.shape[0]] = pi
+                    # flatten data.local_obs to forward for all agents at once
+                    flattened_local_obs = data.local_obs.reshape(
+                        (args.batch_size * env.unwrapped.max_num_agents, np.prod(single_observation_space.shape) + 1)
+                    )
+                    # forward pass to get next actions and log probs
+                    pi, log_pi, _ = actor.get_action(flattened_local_obs)
+                    next_joint_actions = pi.reshape(
+                        (args.batch_size, np.prod(single_action_space.shape) * env.unwrapped.max_num_agents)
+                    )
+                    # Sums the log probs of the actions in the agent dimension to get the joint log prob
+                    log_pi = einops.reduce(
+                        log_pi.reshape((args.batch_size, env.unwrapped.max_num_agents)), "b a -> b ()", "sum"
+                    )
 
-                        # SAC pi update
-                        qf1_pi = qf1(data.global_obs, next_joint_actions)
-                        qf2_pi = qf2(data.global_obs, next_joint_actions)
-                        min_qf_pi = torch.min(qf1_pi, qf2_pi).view(-1)
-                        actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
+                    # SAC pi update
+                    qf1_pi = qf1(data.global_obs, next_joint_actions)
+                    qf2_pi = qf2(data.global_obs, next_joint_actions)
+                    min_qf_pi = torch.min(qf1_pi, qf2_pi).view(-1)
+                    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
 
-                        actor_optimizer.zero_grad()
-                        actor_loss.backward()
-                        actor_optimizer.step()
+                    actor_optimizer.zero_grad()
+                    actor_loss.backward()
+                    actor_optimizer.step()
 
-                        if args.autotune:
-                            alpha_loss = torch.tensor(0.0, device=device)
-                            for i in range(env.max_num_agents):
-                                with torch.no_grad():
-                                    _, log_pi, _ = actor.get_action(data.local_obs[:, i, :])
-                                alpha_loss += (-log_alpha * (log_pi + target_entropy)).mean()
+                    if args.autotune:
+                        alpha_loss = torch.tensor(0.0, device=device)
+                        for i in range(env.max_num_agents):
+                            with torch.no_grad():
+                                _, log_pi, _ = actor.get_action(data.local_obs[:, i, :])
+                            alpha_loss += (-log_alpha * (log_pi + target_entropy)).mean()
 
-                            a_optimizer.zero_grad()
-                            alpha_loss.backward()
-                            a_optimizer.step()
-                            alpha = log_alpha.exp().item()
+                        a_optimizer.zero_grad()
+                        alpha_loss.backward()
+                        a_optimizer.step()
+                        alpha = log_alpha.exp().item()
 
             # update the target networks
             if global_step % args.target_network_frequency == 0:
