@@ -161,7 +161,7 @@ def concat_id(local_obs: np.ndarray, id: AgentID) -> np.ndarray:
 
 if __name__ == "__main__":
     args = parse_args()
-    run_name = f"MPE__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"Circle__{args.exp_name}__{args.seed}__{int(time.time())}"
 
     if args.track:
         import wandb
@@ -251,14 +251,6 @@ if __name__ == "__main__":
 
         terminated: bool = any(terminateds.values())
         truncated: bool = any(truncateds.values())
-
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        # for info in infos:
-        #     if "episode" in info.keys():
-        #         print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-        #         writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-        #         writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-        #         break
 
         # TRY NOT TO MODIFY: save data to replay buffer; handle `final_observation`
         real_next_obs = next_obs
@@ -388,6 +380,9 @@ if __name__ == "__main__":
             writer.add_scalar("charts/return", global_return, global_step)
             global_return = 0.0
             global_obs = env.state()
+
+    # Saves the trained actor for execution
+    torch.save(actor.state_dict(), "actor.pth")
 
     env.close()
     writer.close()
