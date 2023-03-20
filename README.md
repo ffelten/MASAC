@@ -16,3 +16,9 @@ The implementation is based on the SAC implementation from the excellent [cleanR
 Shared parameters:
   * Shared critic between all agents;
   * Shared actor (conditioned on agent ID).
+
+## Install & run
+```shell
+poetry install
+poetry run python masac/masac.py
+```
