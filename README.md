@@ -22,3 +22,16 @@ Shared parameters:
 poetry install
 poetry run python masac/masac.py
 ```
+
+## Citation
+If you use this code for your research, please cite this using:
+
+```bibtex
+@misc{masac,
+    author = {Florian Felten},
+    title = {MASAC: A Multi-Agent Soft-Actor-Critic implementation for PettingZoo},
+    year = {2023},
+    publisher = {GitHub},
+    journal = {GitHub repository},
+    howpublished = {\url{https://github.com/ffelten/MASAC}},
+}
