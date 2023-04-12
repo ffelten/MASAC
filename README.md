@@ -28,7 +28,7 @@ If you use this code for your research, please cite this using:
 
 ```bibtex
 @misc{masac,
-    author = {Florian Felten},
+    author = {Florian Felten and El-Ghazali Talbi and Grégoire Danoy},
     title = {MASAC: A Multi-Agent Soft-Actor-Critic implementation for PettingZoo},
     year = {2023},
     publisher = {GitHub},
