@@ -191,11 +191,11 @@ if __name__ == "__main__":
     # device = torch.device("mps") if torch.backends.mps.is_available() else device
 
     # env setup
-    env: ParallelEnv = simple_spread_v2.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
+    env = simple_spread_v2.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
+    env.reset(seed=args.seed)
     single_action_space = env.action_space(env.unwrapped.agents[0])
     single_observation_space = env.observation_space(env.unwrapped.agents[0])
     assert isinstance(single_action_space, gym.spaces.Box), "only continuous action space is supported"
-    _, _ = env.reset(return_info=True, seed=args.seed)
 
     max_action = float(single_action_space.high[0])
 

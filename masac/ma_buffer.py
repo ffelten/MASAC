@@ -138,7 +138,6 @@ class MAReplayBuffer:
                 return np.array(batch_local_obs)
 
         if to_tensor:
-
             return Experience(
                 global_obs=th.tensor(self.global_obs[inds]).to(device),
                 local_obs=flatten_local_obss(self.local_obs, inds),

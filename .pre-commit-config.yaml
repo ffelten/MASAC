@@ -24,7 +24,7 @@ repos:
         args:
           - --ignore-words-list=reacher,ure,referenc,wile,mor
   - repo: https://github.com/PyCQA/flake8
-    rev: 5.0.4
+    rev: 6.0.0
     hooks:
       - id: flake8
         args:
@@ -35,16 +35,16 @@ repos:
           - --show-source
           - --statistics
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.3.0
+    rev: v3.3.1
     hooks:
       - id: pyupgrade
         args: ["--py37-plus"]
   - repo: https://github.com/PyCQA/isort
-    rev: 5.10.1
+    rev: 5.12.0
     hooks:
       - id: isort
   - repo: https://github.com/python/black
-    rev: 22.10.0
+    rev: 23.1.0
     hooks:
       - id: black
 #  - repo: https://github.com/pycqa/pydocstyle
