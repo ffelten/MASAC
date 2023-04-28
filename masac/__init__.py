@@ -2,3 +2,4 @@
 
 from masac import ma_buffer
 from masac.ma_buffer import Experience, MAReplayBuffer
+from masac.utils import extract_agent_id
