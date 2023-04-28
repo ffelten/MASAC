@@ -42,7 +42,7 @@ def parse_args():
                         help="if toggled, this experiment will be tracked with Weights and Biases")
     parser.add_argument("--wandb-project-name", type=str, default="MASAC",
                         help="the wandb's project name")
-    parser.add_argument("--wandb-entity", type=str, default="ffelten",
+    parser.add_argument("--wandb-entity", type=str, default="florian-felten",
                         help="the entity (team) of wandb's project")
     parser.add_argument("--capture-video", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
                         help="whether to capture videos of the agent performances (check out `videos` folder)")
@@ -58,8 +58,6 @@ def parse_args():
                         help="target smoothing coefficient (default: 0.005)")
     parser.add_argument("--batch-size", type=int, default=256,
                         help="the batch size of sample from the reply memory")
-    parser.add_argument("--exploration-noise", type=float, default=0.1,
-                        help="the scale of exploration noise")
     parser.add_argument("--learning-starts", type=int, default=5e3,
                         help="timestep to start learning")
     parser.add_argument("--policy-lr", type=float, default=3e-4,
@@ -70,8 +68,6 @@ def parse_args():
                         help="the frequency of training policy (delayed)")
     parser.add_argument("--target-network-frequency", type=int, default=1,  # Denis Yarats' implementation delays this by 2.
                         help="the frequency of updates for the target nerworks")
-    parser.add_argument("--noise-clip", type=float, default=0.5,
-                        help="noise clip parameter of the Target Policy Smoothing Regularization")
     parser.add_argument("--alpha", type=float, default=0.2,
                         help="Entropy regularization coefficient.")
     parser.add_argument("--autotune", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
@@ -254,13 +250,9 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: save data to replay buffer; handle `final_observation`
         real_next_obs = next_obs
-        # TODO
-        # if truncated and not terminated:
-        # real_next_obs = next_obs.copy()
-        # for idx, d in enumerate(infos["_final_observation"]):
-        #     if d:
-        #         real_next_obs[idx] = infos["final_observation"][idx]
-
+        # TODO PZ doesn't have that yet
+        # if truncated:
+        #     real_next_obs = infos["final_observation"].copy()
         rb.add(
             global_obs=global_obs,
             local_obs=obs,
