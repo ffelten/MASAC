@@ -17,7 +17,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import orbax.checkpoint
 from crazy_rl.multi_agent.surround.surround import Surround
+from etils import epath
 from flax.training.train_state import TrainState
 
 # from pettingzoo.mpe import simple_spread_v2
@@ -138,7 +140,7 @@ class Critic(nn.Module):
 
 
 class EnsembleCritic(nn.Module):
-    """Parallelize the ensemble of Q Networks used in SAC (2 in the original implementation)"""
+    """Parallelize the ensemble of Q Networks used in SAC (2 in the original SAC implementation)"""
 
     hidden_dim: int = 256
     num_critics: int = 2
@@ -170,17 +172,17 @@ class RLTrainState(TrainState):
     target_params: flax.core.FrozenDict = None
 
 
-@partial(jax.jit, static_argnames="actor")
+@partial(jax.jit, static_argnames="actor_module")
 def sample_action(
-    actor: Actor,
+    actor_module: Actor,
     actor_state: TrainState,
     local_observations_and_ids: jnp.ndarray,
     key: jax.random.KeyArray,
 ) -> jnp.array:
-    """Sample an action from the actor network.
+    """Sample an action from the actor network then feed it to a gaussian distribution to get a continuous action.
 
     Args:
-        actor: Actor network.
+        actor_module: Actor network.
         actor_state: Actor network parameters.
         local_observations_and_ids: Local observations and agent ids.
         key: JAX random key.
@@ -188,11 +190,19 @@ def sample_action(
     Returns: A tuple of (action, key).
     """
     key, subkey = jax.random.split(key, 2)
-    mean, log_std = actor.apply(actor_state.params, local_observations_and_ids)
+    mean, log_std = actor_module.apply(actor_state.params, local_observations_and_ids)
     action_std = jnp.exp(log_std)
     gaussian_action = mean + action_std * jax.random.normal(subkey, shape=mean.shape)
     action = jnp.tanh(gaussian_action)
     return action, key
+
+
+@partial(jax.jit, static_argnames="actor_module")
+def sample_action_for_agent(actor_module: Actor, actor_state: TrainState, obs: jnp.ndarray, agent_id, key):
+    """Samples an action from the policy given an observation and an agent_id. This is vmapped to get all actions at each timestep."""
+    obs_with_ids = jnp.append(obs[agent_id], agent_id)
+    act, key = sample_action(actor_module, actor_state, obs_with_ids, key)
+    return act, key
 
 
 @jax.jit
@@ -201,7 +211,7 @@ def sample_action_and_log_prob(
     log_std: jnp.ndarray,
     subkey: jax.random.KeyArray,
 ):
-    """Sample an action from a Gaussian distribution with mean and log_std.
+    """Same as above except it returns the log prob as well (for learning).
 
     Args:
         mean: Mean of the Gaussian distribution.
@@ -219,9 +229,17 @@ def sample_action_and_log_prob(
     return action, log_prob
 
 
-@partial(jax.jit, static_argnames="actor")
-def select_action(actor: Actor, actor_state: TrainState, observations: jnp.ndarray, agent_id: jnp.ndarray) -> jnp.array:
-    return actor.apply(actor_state.params, observations, agent_id)[0]
+@partial(jax.jit, static_argnames="actor_module")
+def sample_action_and_log_prob_for_agent(
+    actor_module: Actor,
+    actor_params: flax.core.FrozenDict,
+    local_obs_and_id_for_agent: jnp.ndarray,
+    subkey: jax.random.KeyArray,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Returns the actions and log probabilities for a single agent. This is vmapped for each agent at each timestep."""
+    mean, log_std = actor_module.apply(actor_params, local_obs_and_id_for_agent)
+    actions, next_log_prob = sample_action_and_log_prob(mean, log_std, subkey)
+    return actions, next_log_prob
 
 
 def normalize_action(action_space: gym.spaces.Box, action: np.ndarray) -> np.ndarray:
@@ -311,14 +329,6 @@ def main():
         tx=optax.adam(learning_rate=args.q_lr),
     )
 
-    @jax.jit
-    def sample_action_and_log_prob_for_agent(
-        local_obs_and_id_for_agent: jnp.ndarray, actor_params, subkey: jax.random.KeyArray
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        mean, log_std = actor_module.apply(actor_params, local_obs_and_id_for_agent)
-        next_state_actions, next_log_prob = sample_action_and_log_prob(mean, log_std, subkey)
-        return next_state_actions, next_log_prob
-
     # Define update functions here to limit the need for static argname
     @jax.jit
     def update_critic(
@@ -350,14 +360,14 @@ def main():
         key, subkey = jax.random.split(key, 2)
 
         # Sample next actions and log probs for each agent (in parallel)
-        next_state_actions, next_log_prob = jax.vmap(sample_action_and_log_prob_for_agent, in_axes=(1, None, None))(
-            next_local_obs_and_id, actor_state.params, subkey
+        next_state_actions, next_log_prob = jax.vmap(sample_action_and_log_prob_for_agent, in_axes=(None, None, 1, None))(
+            actor_module, actor_state.params, jnp.array(next_local_obs_and_id), subkey
         )
 
-        # TODO maybe vmap?
         joint_next_state_actions = next_state_actions.reshape((args.batch_size, single_action_space.shape[0] * num_agents))
         next_log_prob = next_log_prob.sum(axis=0)
         global_state_and_joint_actions = jnp.concatenate((next_global_obs, joint_next_state_actions), axis=1)
+        # critic next values is based on the target params!
         critic_next_values = critic_module.apply(critic_state.target_params, global_state_and_joint_actions)
         next_q_values = jnp.min(critic_next_values, axis=0)
         # td error + entropy term
@@ -366,7 +376,7 @@ def main():
         # shape is (batch_size, 1)
         target_q_values = rewards.reshape(-1, 1) + (1 - terminateds.reshape(-1, 1)) * args.gamma * next_q_values
 
-        def mse_loss(params):
+        def mse_loss(params: flax.core.FrozenDict):
             global_obs_and_joint_actions = jnp.concatenate((global_obs, joint_actions), axis=1)
             # shape is (n_critics, batch_size, 1)
             current_q_values = critic_module.apply(params, global_obs_and_joint_actions)
@@ -407,8 +417,8 @@ def main():
         key, subkey = jax.random.split(key, 2)
 
         def actor_loss(params):
-            actions, log_prob = jax.vmap(sample_action_and_log_prob_for_agent, in_axes=(1, None, None))(
-                local_obs_and_ids, params, subkey
+            actions, log_prob = jax.vmap(sample_action_and_log_prob_for_agent, in_axes=(None, None, 1, None))(
+                actor_module, params, jnp.array(local_obs_and_ids), subkey
             )
             joint_actions = actions.reshape((args.batch_size, single_action_space.shape[0] * num_agents))
             log_prob = log_prob.sum(axis=0)
@@ -450,14 +460,10 @@ def main():
 
     # TRY NOT TO MODIFY: start the game
     obs: Dict[str, np.ndarray] = env.reset(seed=args.seed)
+    # !! Limitation of MASAC is that we assume the agent ids are from 0 to n-1
+    agent_ids: jnp.ndarray = jnp.arange(num_agents)
     global_return = 0.0
     global_obs: np.ndarray = env.state()
-
-    @jax.jit
-    def sample_action_for_agent(actor_state, obs, agent_id, key):
-        obs_with_ids = jnp.append(obs[agent_id], agent_id)
-        act, key = sample_action(actor_module, actor_state, obs_with_ids, key)
-        return act, key
 
     # Display progress bar if available
     generator = tqdm(range(args.total_timesteps)) if tqdm is not None else range(args.total_timesteps)
@@ -467,13 +473,14 @@ def main():
             actions: Dict[str, np.ndarray] = {agent: env.action_space(agent).sample() for agent in env.agents}
         else:
             actions: Dict[str, np.ndarray] = {}
-            obs_array = np.array([obs[agent] for agent in env.agents])
-            acts, keys = jax.vmap(sample_action_for_agent, in_axes=(None, None, 0, None))(
-                actor_state, jnp.array(obs_array), jnp.arange(num_agents), key
+            obs_array = jnp.array([obs[agent] for agent in env.agents])
+            acts, keys = jax.vmap(sample_action_for_agent, in_axes=(None, None, None, 0, None))(
+                actor_module, actor_state, obs_array, agent_ids, key
             )
             # TODO split into subkeys?
             key = keys[0]
 
+            # Construct the dict of actions for PZ
             for agent_id, act in zip(env.agents, acts):
                 act = np.array(act)
                 # Clip due to numerical instability
@@ -567,6 +574,13 @@ def main():
                 wandb.log({"charts/return": global_return, "global_step": global_step}, step=global_step)
             global_return = 0.0
             global_obs = env.state()
+
+    # SAVING MODEL PARAMETERS
+    directory = epath.Path("trained_model")
+    actor_dir = directory / "actor"
+    print("Saving actor to ", actor_dir)
+    ckptr = orbax.checkpoint.PyTreeCheckpointer()
+    ckptr.save(actor_dir, actor_state, force=True)
 
     env.close()
     wandb.finish()
