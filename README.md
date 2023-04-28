@@ -4,9 +4,9 @@
 
 # MASAC
 
-:warning: Work in progress, suggestions are welcome. Currently working on a jax version of masac 🤭:warning:
+:warning: Work in progress, suggestions are welcome.:warning:
 
-Simple, yet useful Multi-Agent SAC for Parallel [PettingZoo](https://pettingzoo.farama.org/) environments.
+Simple, yet useful [Jax](https://github.com/google/jax) and [Torch](https://pytorch.org/) Multi-Agent SAC for Parallel [PettingZoo](https://pettingzoo.farama.org/) environments.
 It is assumed that the agents are homogeneous (actions and observations) and all have the same global reward.
 
 The implementation is based on the SAC implementation from the excellent [cleanRL](https://github.com/vwxyzjn/cleanrl) repo.
