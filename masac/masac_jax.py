@@ -21,8 +21,6 @@ import orbax.checkpoint
 from crazy_rl.multi_agent.surround.surround import Surround
 from etils import epath
 from flax.training.train_state import TrainState
-
-# from pettingzoo.mpe import simple_spread_v2
 from pettingzoo.utils.env import ObsType
 from tqdm import tqdm
 
