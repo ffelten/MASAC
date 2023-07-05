@@ -457,7 +457,7 @@ def main():
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
-    obs: Dict[str, np.ndarray] = env.reset(seed=args.seed)
+    obs, info = env.reset(seed=args.seed)
     # !! Limitation of MASAC is that we assume the agent ids are from 0 to n-1
     agent_ids: jnp.ndarray = jnp.arange(num_agents)
     global_return = 0.0

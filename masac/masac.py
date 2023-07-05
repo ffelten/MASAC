@@ -224,7 +224,7 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
-    obs: Dict[str, np.ndarray] = env.reset(seed=args.seed)
+    obs, info = env.reset(seed=args.seed)
     global_return = 0.0
     global_obs: np.ndarray = env.state()
     for global_step in range(args.total_timesteps):
