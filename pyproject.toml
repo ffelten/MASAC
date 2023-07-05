@@ -18,8 +18,8 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8, <3.12"
-pettingzoo = "^1.22.3"
+python = ">=3.8, <3.12"
+pettingzoo = "^1.23.1"
 numpy = "^1.21.0"
 torch = "^1.11.0, <2.0.0"
 pygame = "^2.1.0"
