@@ -18,7 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import orbax.checkpoint
-from crazy_rl.multi_agent.surround.surround import Surround
+from crazy_rl.multi_agent.numpy.surround.surround import Surround
 from etils import epath
 from flax.training.train_state import TrainState
 from pettingzoo.utils.env import ObsType
