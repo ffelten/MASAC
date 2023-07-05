@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from pettingzoo import ParallelEnv
-from pettingzoo.mpe import simple_spread_v2
+from pettingzoo.mpe import simple_spread_v3
 from pettingzoo.utils.env import AgentID, ObsType
 from torch.utils.tensorboard import SummaryWriter
 
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # device = torch.device("mps") if torch.backends.mps.is_available() else device
 
     # env setup
-    env = simple_spread_v2.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
+    env = simple_spread_v3.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
     env.reset(seed=args.seed)
     single_action_space = env.action_space(env.unwrapped.agents[0])
     single_observation_space = env.observation_space(env.unwrapped.agents[0])
@@ -368,7 +368,7 @@ if __name__ == "__main__":
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
 
         if terminated or truncated:
-            obs = env.reset()
+            obs, info = env.reset()
             writer.add_scalar("charts/return", global_return, global_step)
             global_return = 0.0
             global_obs = env.state()

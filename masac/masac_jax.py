@@ -18,13 +18,13 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import orbax.checkpoint
-from crazy_rl.multi_agent.numpy.surround.surround import Surround
+import wandb
 from etils import epath
 from flax.training.train_state import TrainState
+from pettingzoo.mpe import simple_spread_v3
 from pettingzoo.utils.env import ObsType
 from tqdm import tqdm
 
-import wandb
 from ma_buffer import Experience, MAReplayBuffer
 
 
@@ -277,13 +277,7 @@ def main():
         )
 
     # INITIALISATION
-    env = Surround(
-        drone_ids=np.array([0, 1, 2, 3, 4]),
-        render_mode=None,
-        init_flying_pos=np.array([[0, 0, 1], [2, 1, 1], [0, 1, 1], [2, 2, 1], [1, 0, 1]]),
-        target_location=np.array([1, 1, 2.5]),
-    )
-    # env = simple_spread_v2.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
+    env = simple_spread_v3.parallel_env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=True)
     env.reset(seed=args.seed)
     single_action_space = env.action_space(env.unwrapped.agents[0])
     single_observation_space = env.observation_space(env.unwrapped.agents[0])
@@ -567,7 +561,7 @@ def main():
                 wandb.log(to_log, step=global_step)
 
         if terminated or truncated:
-            obs = env.reset()
+            obs, info = env.reset()
             if args.track:
                 wandb.log({"charts/return": global_return, "global_step": global_step}, step=global_step)
             global_return = 0.0
