@@ -357,7 +357,7 @@ def main():
         )
 
         joint_next_state_actions = next_state_actions.reshape((args.batch_size, single_action_space.shape[0] * num_agents))
-        next_log_prob = next_log_prob.sum(axis=0)
+        next_log_prob = next_log_prob.sum(axis=0)  # TODO: check if this is correct
         global_state_and_joint_actions = jnp.concatenate((next_global_obs, joint_next_state_actions), axis=1)
         # critic next values is based on the target params!
         critic_next_values = critic_module.apply(critic_state.target_params, global_state_and_joint_actions)

@@ -320,6 +320,7 @@ if __name__ == "__main__":
                         (args.batch_size, np.prod(single_action_space.shape) * env.unwrapped.max_num_agents)
                     )
                     # Sums the log probs of the actions in the agent dimension to get the joint log prob
+                    # TODO check if this is correct
                     log_pi = einops.reduce(
                         log_pi.reshape((args.batch_size, env.unwrapped.max_num_agents)), "b a -> b ()", "sum"
                     )
