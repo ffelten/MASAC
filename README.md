@@ -4,7 +4,7 @@
 
 # MASAC
 
-:warning: Work in progress, suggestions are welcome.:warning:
+:warning: Work in progress, I did not extensively test the algorithms (especially the jax version).:warning:
 
 Simple, yet useful [Jax](https://github.com/google/jax) and [Torch](https://pytorch.org/) Multi-Agent SAC for Parallel [PettingZoo](https://pettingzoo.farama.org/) environments.
 It is assumed that the agents are homogeneous (actions and observations) and all have the same global reward.
